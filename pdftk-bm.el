@@ -1,10 +1,32 @@
 ;;; pdftk-bm.el --- Edit PDF bookmarks (AKA outline or table of contents) -*- lexical-binding: t; -*-
 ;; Version: 1.0.0
-;; Keywords: pdf pdftk
-;; Package-Requires: ((emacs "26.1"))
-;;; Structs
-(setq pdftk-bm-filepath "~/elisp/pdftk-bm/metadata")
+;; URL: https://github.com/jonathanmfung/pdftk-bm.el
+;; Keywords: pdf, pdftk, tools
+;; Package-Requires: ((emacs "26.1") (transient "0.7"))
 
+;;; Commentary:
+;; Tool to modify PDF bookmarks (aka Table of Contents, Outline).
+;; Wrapper over `pdftk`'s `dump_data` and `update_info`.
+;;
+;; Flow
+;; 1. User selects file through read-file-name.
+;; 2. *pdftk-bm* buffer of bookmark headings pops up.
+;; 3. User edits buffer with insert/delete/promote/demote.
+;;    Buffer refreshes with -view, can restart process with -fresh.
+;;    Keybinds can be viewed with `pdftk-bm-transient`, bound to '?'.
+;; 4. User does C-c C-c that runs `pdftk update_info` and
+;;    creates a new pdf file.
+;; 5. User verifies "<filename>_modifed.pdf".
+
+;;; Code:
+
+(require 'transient)
+
+;;;; Internal Vars
+(defvar pdftk-bm-pdf-filepath nil
+  "Absolute filepath of pdf whose bookmarks are being modified.")
+
+;;;; Structs
 (cl-defstruct
     ;; TODO: rename to pdftk-bm--bookmark
     (pdftk-bm-bookmark (:constructor pdftk-bm-bookmark-create)
@@ -13,64 +35,50 @@
   (level 1 :type 'integer)
   (page-number 1 :type 'integer))
 
-;; Elsa annotations
-;; (add-one :: (function (number) number))
-(defun add-one (x) (+ 1 x))
-
-;; (return-plist :: (function () (list (or symbol number))))
-(defun return-plist () '(:foo 1 :bar 2))
-
-(lambda (index arg)
-  ;; (var arg :: (struct elsa-form))
-  (progn
-    ;; arg here is now of type elsa-form
-    (oref arg start)))
-
-;; (foo-bookmark :: (function ((struct pdftk-bm-bookmark)) string))
-(defun foo-bookmark (bm)
-  (pdftk-bm-bookmark-title bm))
-
-;;; Parsing
-
+;;;; Parsing
 ;; Begin > Title > Level > PageNumber
 (defun pdftk-bm--parse-metadata (md)
   "MD is a list of metadata file lines.
 Returns a list of pdftk-bm-bookmark."
   (declare (side-effect-free t))
-  ;; (var result-list :: (list pdftk-bm-bookmark))
   (let (temp result-list)
     (dolist (line md result-list)
       (pcase (split-string line ": ")
 	('("BookmarkBegin") (setf temp (pdftk-bm-bookmark-create)))
 	(`("BookmarkTitle" ,val) (setf (pdftk-bm-bookmark-title temp) val))
-	(`("BookmarkLevel" ,val) (setf (pdftk-bm-bookmark-level temp) (string-to-number val)))
-	(`("BookmarkPageNumber" ,val) (progn
-					(setf (pdftk-bm-bookmark-page-number temp) (string-to-number val))
-					(setf result-list (cons temp result-list))))
+	(`("BookmarkLevel" ,val)
+	 (setf (pdftk-bm-bookmark-level temp) (string-to-number val)))
+	(`("BookmarkPageNumber" ,val)
+	 (progn
+	   (setf (pdftk-bm-bookmark-page-number temp) (string-to-number val))
+	   (setf result-list (cons temp result-list))))
 	(e (error "Unexpected metadata field %s" e))))))
 
 (defvar pdftk-bm--metadata-remainder nil
   "Single string of non-Bookmark metadata.")
 
 (defun pdftk-bm-parse (file-content)
-  "FILE-CONTENT is output of `pdftk dump_data`"
+  "FILE-CONTENT is output of `pdftk dump_data`."
   (let* ((lines (split-string file-content "\n"))
 	 (pred (apply-partially #'string-match "^Bookmark*"))
 	 (lines-filtered (seq-filter pred lines))
-	 (lines-remainder (seq-remove (lambda (x) (or (funcall pred x) (string-empty-p x))) lines))
-	 ;; possible TODO: instead of filtering, can use wildcard arm of --parse-metadata to keep the excess lines
+	 (lines-remainder
+	  (seq-remove (lambda (x) (or (funcall pred x) (string-empty-p x))) lines))
+	 ;; possible TODO: instead of filtering, can use wildcard
+	 ;;   arm of --parse-metadata to keep the excess lines
 	 (bm-list (pdftk-bm--parse-metadata lines-filtered)))
     (setq pdftk-bm--metadata-remainder (string-join lines-remainder "\n"))
     ;; Parsing adds latter elems to top, so reverse for proper order
     (seq-reverse bm-list)))
 
-;;; Buffer Creation
+;;;; Buffer Creation
 
 (cl-defgeneric pdftk-bm-to-heading (prefix level text)
   (:doc "Format an outline-mode heading"))
 
 ;; TODO: remove unused 'pdftk-bm-level/page-number props
-(cl-defmethod pdftk-bm-to-heading (&key prefix-char level text page-number bookmark-obj)
+(cl-defmethod pdftk-bm-to-heading
+  (&key prefix-char level text page-number bookmark-obj)
   (propertize text
 	      'line-prefix (concat (make-string level prefix-char) " ")
 	      'pdftk-bm-level level 'pdftk-bm-page-number page-number
@@ -90,23 +98,29 @@ Returns a list of pdftk-bm-bookmark."
 ;; Buffer & Text Properties & Overlays ----------------
 
 (defvar pdftk-bm--data nil
-  " list of (:Bookmark object :title Text overlay :page-number Page Number overlay)")
+  "List of (:Bookmark object :title Text overlay :page-number Page Number overlay).")
 
 (defun pdftk-bm--sort-data ()
   "Inplace sort, by page-number."
-  ;; TODO: Since multiple bookmarks can be on same page, need a way to preserve order
-  ;;       E.g. running pdftk-bm--make-buffer-view multiple times results in different orders
+  ;; TODO: Since multiple bookmarks can be on same page, need a way to preserve order.
+  ;;       E.g. running pdftk-bm--make-buffer-view multiple times results in different orders.
+  ;; TODO: If pdftk adds support for positions, then that is enough for unique sort.
+  ;;       https://gitlab.com/pdftk-java/pdftk/-/issues/130
   (setq pdftk-bm--data
 	(seq-sort-by (lambda (elem) (pdftk-bm-bookmark-page-number (plist-get elem :obj)))
 		     #'<= pdftk-bm--data)))
 
 (defun pdftk-bm--data-title (obj)
+  "Extract OBJ's title from pdftk-bm--data."
   (plist-get (seq-find (lambda (x) (eq (plist-get x :obj) obj)) pdftk-bm--data) :title))
 
 (defun pdftk-bm--data-page-number (obj)
+  "Extract OBJ's page-number from pdftk-bm--data."
   (plist-get (seq-find (lambda (x) (eq (plist-get x :obj) obj)) pdftk-bm--data) :page-number))
 
 (defun pdftk-bm--insert-heading (bookmark update-data-flag)
+  "Insert BOOKMARK as heading at point.
+When UPDATE-DATA-FLAG is non-nil, pdftk-bm--data is modified."
   (let* ((bol (line-beginning-position))
 	 (eol (line-end-position))
          (olay-title (make-overlay bol bol))
@@ -115,7 +129,7 @@ Returns a list of pdftk-bm-bookmark."
     ;;       also needs same logic in --update-props
     (overlay-put olay-title 'after-string
 		 (propertize (pdftk-bm-bookmark-title bookmark)
-                             'face '(:foreground "pink" :weight bold)))
+                             'face '(:foreground "gray" :weight bold)))
     (overlay-put olay-pn 'after-string
 		 (propertize (concat " " (number-to-string (pdftk-bm-bookmark-page-number bookmark)))
                              'face '(:foreground "red" :weight bold)))
@@ -123,6 +137,8 @@ Returns a list of pdftk-bm-bookmark."
       (add-to-list 'pdftk-bm--data (list :obj bookmark :title olay-title :page-number olay-pn)))))
 
 (defun pdftk-bm--make-buffer (bookmark-list update-data-flag)
+  "Create buffer populated with BOOKMARK-LIST.
+When UPDATE-DATA-FLAG is non-nil, pdftk-bm--data is modified."
   (let ((buf (get-buffer-create "*pdftk-bm*")))
     (with-current-buffer buf
       (fundamental-mode)
@@ -138,24 +154,26 @@ Returns a list of pdftk-bm-bookmark."
     (goto-char (point-min))))
 
 (defun pdftk-bm-make-buffer-fresh ()
-  "Re-parse old metadata and create fresh data."
+  "Re-parse old metadata and create fresh pdftk-bm--data."
   (interactive)
   (let ((inhibit-read-only t)
 	(file-content (pdftk-bm-get-metadata pdftk-bm-pdf-filepath)))
     (pdftk-bm--make-buffer (pdftk-bm-parse file-content) t)))
 
 (defun pdftk-bm-make-buffer-view ()
-  "Construct buffer from existing data :obj fields,"
+  "Construct buffer from existing pdftk-bm--data :obj fields."
   (interactive)
   (pdftk-bm--sort-data)
   (let ((inhibit-read-only t))
     (pdftk-bm--make-buffer (mapcar (lambda (elem) (plist-get elem :obj)) pdftk-bm--data) nil)))
 
-;;; Buffer Manipulation
+;;;; Buffer Manipulation
 (defun pdftk-bm--obj-at-point ()
+  "Get bookmark object at point."
   (get-text-property (point) 'pdftk-bm-bookmark-obj))
 
 (defun pdftk-bm--update-props ()
+  "Rerender line at point."
   (let* ((obj (pdftk-bm--obj-at-point))
 	 (olay-title (pdftk-bm--data-title obj))
 	 (olay-pn (pdftk-bm--data-page-number obj))
@@ -174,14 +192,16 @@ Returns a list of pdftk-bm-bookmark."
 						      'face '(:foreground "purple" :weight bold)))))
 
 (defun pdftk-bm--change-level (new-level)
+  "Modify bookmark object at point to have NEW-LEVEL."
   (let* ((obj (pdftk-bm--obj-at-point))
 	 (inhibit-read-only t))
     (setf (pdftk-bm-bookmark-level obj) new-level)
     (pdftk-bm--update-props)))
 
-;;;; Interactive Commands
+;;;;; Interactive Commands
 
 (defun pdftk-bm-promote ()
+  "Decrease level of bookmark object at point."
   (interactive)
   (let* ((obj (pdftk-bm--obj-at-point))
 	 (cur-level (pdftk-bm-bookmark-level obj))
@@ -191,13 +211,16 @@ Returns a list of pdftk-bm-bookmark."
     (pdftk-bm--change-level new-level)))
 
 (defun pdftk-bm-demote ()
+  "Increase level of bookmark object at point."
   (interactive)
   (let* ((obj (pdftk-bm--obj-at-point))
 	 (cur-level (pdftk-bm-bookmark-level obj))
 	 (new-level (1+ cur-level)))
     (pdftk-bm--change-level new-level)))
 
+;; TODO: Both edit-page-number/title do not update display after execution.
 (defun pdftk-bm-edit-page-number (new-page-number)
+  "Modify bookmark object at point to have NEW-PAGE-NUMBER."
   (interactive (list (read-number "New Page Number: "
 				  (pdftk-bm-bookmark-page-number (get-text-property (point) 'pdftk-bm-bookmark-obj)))))
   (let* ((obj (pdftk-bm--obj-at-point))
@@ -206,10 +229,10 @@ Returns a list of pdftk-bm-bookmark."
     (pdftk-bm--update-props)))
 
 (defun pdftk-bm-edit-title (new-title)
+  "Modify bookmark object at point to have NEW-TITLE."
   (interactive (list (read-string "New Title: "
 				  (pdftk-bm-bookmark-title (get-text-property (point) 'pdftk-bm-bookmark-obj)))))
   (let* ((obj (pdftk-bm--obj-at-point))
-	 (cur-title (pdftk-bm-bookmark-title obj))
 	 (inhibit-read-only t))
     (setf (pdftk-bm-bookmark-title obj) new-title)
     (pdftk-bm--update-props)))
@@ -217,10 +240,11 @@ Returns a list of pdftk-bm-bookmark."
 (defun pdftk-bm-insert-new-bookmark ()
   "Prompt for creation of bookmark, then insert in next line."
   ;; TODO: this fails when used at (point-max), specifically put-text-property goes out of bounds.
+  ;;       Maybe add wrapping condition that checks if (point-max) and automatically backward-char.
+  ;;         Still doesn't exactly solve case of empty buffer.
   (interactive)
   (let ((inhibit-read-only t)
 	(prev-props (text-properties-at (point)))
-	(prev-obj (pdftk-bm--obj-at-point))
 	(bookmark (pdftk-bm-bookmark-create :title (read-string "Title: ")
 					    :level (read-number "Level: ")
 					    :page-number (read-number "Page Number: "))))
@@ -240,9 +264,10 @@ Returns a list of pdftk-bm-bookmark."
     ;; get obj at point and delete from data
     (setq pdftk-bm--data (seq-remove (lambda (x) (eq (plist-get x :obj) obj)) pdftk-bm--data))))
 
-;;; Serialization
+;;;; Serialization
 
 (defun pdftk-bm--bookmark-serialize (bookmark)
+  "Convert BOOKMARK to pdftk info format."
   (let ((title (pdftk-bm-bookmark-title bookmark))
 	(level (pdftk-bm-bookmark-level bookmark))
 	(page-number (pdftk-bm-bookmark-page-number bookmark)))
@@ -255,11 +280,14 @@ Returns a list of pdftk-bm-bookmark."
 ;; (pdftk-bm--bookmark-serialize (pdftk-bm-bookmark-create :title "foo" :level 2 :page-number 33))
 
 (defun pdftk-bm--data-serialize ()
+  "Convert pdftk-bm--data to pdftk info format."
   (pdftk-bm--sort-data)
   (let ((objs (mapcar (lambda (elem) (plist-get elem :obj)) pdftk-bm--data)))
     (string-join (mapcar 'pdftk-bm--bookmark-serialize objs) "\n")))
 
 (defun pdftk-bm--metadata-new ()
+  "Merge PDF file's remainder metadata with pdftk-bm--data
+into full pdftk info format."
   ;; NOTE: Even though data-serialize is being appended to remainder,
   ;;       it seems that `pdftk update_info` does some innate sorting--
   ;;       Bookmark section always appears after Info & NumberOfPages
@@ -267,42 +295,40 @@ Returns a list of pdftk-bm-bookmark."
 	       "\n"))
 
 (defun pdftk-bm-check ()
-  (unless (executable-find "pdftk") (error "pdftk executable cannot be found.")))
-
-(defvar pdftk-bm-pdf-filepath nil "Absolute filepath of pdf whose bookmarks are being modified.")
+  "Check if pdftk program is accessible."
+  (unless (executable-find "pdftk") (error "pdftk executable cannot be found")))
 
 (defun pdftk-bm-get-metadata (filepath)
+  "Get metadata of pdf FILEPATH."
   (shell-command-to-string
    (string-join (list "pdftk" (shell-quote-argument (expand-file-name filepath)) "dump_data_utf8") " ")))
 
 ;; (pdftk-bm-get-metadata (read-file-name ""))
 
 (defun pdftk-bm--filepath-with-suffix (filepath suffix)
+  "Add SUFFIX to filename portion of FILEPATH."
   (let* ((dir (file-name-directory filepath))
          (base (file-name-sans-extension (file-name-nondirectory filepath)))
          (ext (file-name-extension filepath)))
     (concat dir base suffix "." ext)))
 ;; (pdftk-bm--filepath-with-suffix "~/elisp/pdftk-bm/TRaAT.pdf" "_modified")
 
-;;; Main Commands
-;; Flow
-;; 1. User selects file through read-file-name
-;; 2. *pdftk-bm<FILE>* buffer of bookmark headings pops up
-;; 3. User edits buffer with insert/delete/promote/demote
-;;    Buffer refreshes with -view, can restart process with -fresh
-;; 4. User does C-c C-c that runs `pdftk update_info` and creates a new pdf file
+;;;; Main Commands
+;; TODO: Overlays cannot be searched with isearch.
+;;       May want to convert title from overlay to regular text to allow searching
 
-;; TODO: overlays cannot be searched with isearch
-
-;; TODO:
+;;;###autoload
 (defun pdftk-bm-find-pdf ()
+  "Select a PDF to create a pdftk-bm buffer from."
   (interactive)
   (pdftk-bm-check)
   (setq pdftk-bm-pdf-filepath (expand-file-name (read-file-name "PDF: ")))
-  (pdftk-bm--make-buffer-fresh))
+  (pdftk-bm-make-buffer-fresh))
 
 ;; NOTE: Always default to making a copy of pdf, let user check and delete original
 (defun pdftk-bm-do-update-pdf ()
+  "Apply pdftk-bm--data to registered PDF.
+Modifies a copy of original file, suffixed with '_modified'."
   (interactive)
   (let* ((new-filepath (pdftk-bm--filepath-with-suffix pdftk-bm-pdf-filepath "_modified"))
 	 (process (make-process :name "pdftk-bm-update"
@@ -316,9 +342,35 @@ Returns a list of pdftk-bm-bookmark."
     (process-send-eof process)
     (message "Successfully created %s" new-filepath)))
 
+(transient-define-prefix pdftk-bm-transient ()
+  [["Edit At Point"
+    ("b" "Promote Heading" pdftk-bm-promote :transient t)
+    ("f" "Demote Heading" pdftk-bm-demote :transient t)]
+   [""
+    ("t" "Edit Title" pdftk-bm-edit-title)
+    ("p" "Edit Page Number" pdftk-bm-edit-page-number)]]
+
+  ;; TODO: maybe add transient arg for page offset, e.g. when book page 1 is pdf page 21.
+  ;;       Then edit-page-number and insert-new-bookmark can do automatically calculate.
+  [["Commands"
+    ("i" "Insert New Bookmark" pdftk-bm-insert-new-bookmark)
+    ("x" "Delete Bookmark" pdftk-bm-delete-bookmark)]
+   [""
+    ("A" "Apply Changes (make a copy of PDF)" pdftk-bm-do-update-pdf)]]
+
+  ["Display" ("g" "Refresh Buffer" pdftk-bm-make-buffer-view)])
+
+(defvar pdftk-bm-mode-map
+  (let ((map (make-sparse-keymap)))
+    (keymap-set map "?" #'pdftk-bm-transient)
+    (keymap-set map "C-c C-c" #'pdftk-bm-do-update-pdf)
+    map))
+
 (define-derived-mode pdftk-bm-mode read-only-mode "pdftk-bm"
   "Major mode for pdftk-bm buffers."
-  ;; TODO: add face-colors for line-prefix, title-overlay, and page-number-overlay
+  ;; TODO: add face-colors for line-prefix, title-overlay, and page-number-overlay.
+  ;;       Maybe also for 'modified status
   :interactive nil)
 
+(provide 'pdftk-bm)
 ;;; pdftk-bm.el ends here

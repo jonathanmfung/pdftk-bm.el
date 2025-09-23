@@ -4,12 +4,13 @@
          "1.0.0"
          "Edit PDF bookmarks (AKA outline or table of contents)")
 
-(website-url "")
+(website-url "https://github.com/jonathanmfung/pdftk-bm.el")
 
-(keywords "pdf" "pdftk")
+(keywords "pdf" "pdftk" "tools")
 
 (package-file "pdftk-bm.el")
 
 (script "test" "echo \"Error: no test specified\" && exit 1")
 
 (depends-on "emacs" "26.1")
+(depends-on "transient" "0.7")
