@@ -110,7 +110,9 @@ Returns a list of pdftk-bm--bookmark."
 ;; Buffer & Text Properties & Overlays ----------------
 
 (defvar pdftk-bm--data nil
-  "List of (:Bookmark object :title Text overlay :page-number Page Number overlay).")
+  "List of (:Bookmark object
+:title-olay Text overlay
+:page-number-olay Page Number overlay).")
 
 (defun pdftk-bm--sort-data ()
   "Inplace sort, by page-number."
@@ -122,13 +124,13 @@ Returns a list of pdftk-bm--bookmark."
 	(seq-sort-by (lambda (elem) (pdftk-bm--bookmark-page-number (plist-get elem :obj)))
 		     #'<= pdftk-bm--data)))
 
-(defun pdftk-bm--data-title (obj)
+(defun pdftk-bm--data-title-olay (obj)
   "Extract OBJ's title overlay from pdftk-bm--data."
-  (plist-get (seq-find (lambda (x) (eq (plist-get x :obj) obj)) pdftk-bm--data) :title))
+  (plist-get (seq-find (lambda (x) (eq (plist-get x :obj) obj)) pdftk-bm--data) :title-olay))
 
-(defun pdftk-bm--data-page-number (obj)
+(defun pdftk-bm--data-page-number-olay (obj)
   "Extract OBJ's page-number overlay from pdftk-bm--data."
-  (plist-get (seq-find (lambda (x) (eq (plist-get x :obj) obj)) pdftk-bm--data) :page-number))
+  (plist-get (seq-find (lambda (x) (eq (plist-get x :obj) obj)) pdftk-bm--data) :page-number-olay))
 
 (defun pdftk-bm--insert-heading (bookmark update-data-flag)
   "Insert BOOKMARK as heading at point.
@@ -146,7 +148,7 @@ When UPDATE-DATA-FLAG is non-nil, pdftk-bm--data is modified."
 		 (propertize (concat " " (number-to-string (pdftk-bm--bookmark-page-number bookmark)))
                              'face '(:foreground "red" :weight bold)))
     (when update-data-flag
-      (add-to-list 'pdftk-bm--data (list :obj bookmark :title olay-title :page-number olay-pn)))))
+      (add-to-list 'pdftk-bm--data (list :obj bookmark :title-olay olay-title :page-number-olay olay-pn)))))
 
 (defun pdftk-bm--make-buffer (bookmark-list update-data-flag)
   "Create buffer populated with BOOKMARK-LIST.
@@ -187,8 +189,8 @@ When UPDATE-DATA-FLAG is non-nil, pdftk-bm--data is modified."
 (defun pdftk-bm--update-props ()
   "Rerender line at point."
   (let* ((obj (pdftk-bm--obj-at-point))
-	 (olay-title (pdftk-bm--data-title obj))
-	 (olay-pn (pdftk-bm--data-page-number obj))
+	 (olay-title (pdftk-bm--data-title-olay obj))
+	 (olay-pn (pdftk-bm--data-page-number-olay obj))
 	 (title (pdftk-bm--bookmark-title obj))
 	 (level (pdftk-bm--bookmark-level obj))
 	 (page-number (pdftk-bm--bookmark-page-number obj))
