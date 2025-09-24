@@ -104,11 +104,6 @@ Returns a list of pdftk-bm--bookmark."
 		       :text (pdftk-bm--bookmark-title bookmark)
 		       :bookmark-obj bookmark))
 
-;; (pdftk-bm-to-heading :prefix-char ?- :level 2 :text "Asdf" :page-number 10)
-;; (pdftk-bm-to-heading (pdftk-bm--bookmark-create :title "Foo" :level 3 :page-number 50))
-
-;; Buffer & Text Properties & Overlays ----------------
-
 (defvar pdftk-bm--data nil
   "List of (:Bookmark object
 :title-olay Text overlay
@@ -305,8 +300,6 @@ When UPDATE-DATA-FLAG is non-nil, pdftk-bm--data is modified."
 		       (format "BookmarkPageNumber: %d" page-number))
 		 "\n")))
 
-;; (pdftk-bm--bookmark-serialize (pdftk-bm--bookmark-create :title "foo" :level 2 :page-number 33))
-
 (defun pdftk-bm--data-serialize ()
   "Convert pdftk-bm--data to pdftk info format."
   (pdftk-bm--sort-data)
@@ -331,15 +324,12 @@ into full pdftk info format."
   (shell-command-to-string
    (string-join (list "pdftk" (shell-quote-argument (expand-file-name filepath)) "dump_data_utf8") " ")))
 
-;; (pdftk-bm-get-metadata (read-file-name ""))
-
 (defun pdftk-bm--filepath-with-suffix (filepath suffix)
   "Add SUFFIX to filename portion of FILEPATH."
   (let* ((dir (file-name-directory filepath))
          (base (file-name-sans-extension (file-name-nondirectory filepath)))
          (ext (file-name-extension filepath)))
     (concat dir base suffix "." ext)))
-;; (pdftk-bm--filepath-with-suffix "~/elisp/pdftk-bm/TRaAT.pdf" "_modified")
 
 ;;;; Main Commands
 ;; TODO: Overlays cannot be searched with isearch.
