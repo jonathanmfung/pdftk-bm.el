@@ -29,6 +29,11 @@
 (defcustom pdftk-bm-page-offset 0
   "Page offset, e.g. when Book page 1 is PDF page 21."
   :type 'integer :group 'pdftk-bm)
+
+(defcustom pdftk-bm-modified-suffix "_modified"
+  "Suffix to add to filename of updated PDF."
+  :type 'string :group 'pdftk-bm)
+
 ;;;; Structs
 (cl-defstruct
     (pdftk-bm--bookmark (:constructor pdftk-bm--bookmark-create)
@@ -338,7 +343,8 @@ into full pdftk info format."
   "Apply pdftk-bm--data to registered PDF.
 Modifies a copy of original file, suffixed with '_modified'."
   (interactive)
-  (let* ((new-filepath (pdftk-bm--filepath-with-suffix pdftk-bm-pdf-filepath "_modified"))
+  (let* ((new-filepath
+	  (pdftk-bm--filepath-with-suffix pdftk-bm-pdf-filepath pdftk-bm-modified-suffix))
 	 (process (make-process :name "pdftk-bm-update"
 				:buffer nil
 				:command `("pdftk" ,pdftk-bm-pdf-filepath
