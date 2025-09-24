@@ -29,6 +29,8 @@
 
 ;;;;; Customs
 (defgroup pdftk-bm nil "Options for pdftk-bm.el."
+  :prefix "pdftk-bm-"
+  :group 'data
   :version "1.0.0")
 
 (defcustom pdftk-bm-page-offset 0
