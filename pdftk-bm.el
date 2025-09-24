@@ -9,12 +9,13 @@
 ;; Wrapper over `pdftk`'s `dump_data` and `update_info`.
 ;;
 ;; Flow
-;; 1. User selects file through read-file-name.
+;; 1. User selects file through `pdftk-bm-find-pdf`
 ;; 2. *pdftk-bm* buffer of bookmark headings pops up.
 ;; 3. User edits buffer with insert/delete/promote/demote.
-;;    Buffer refreshes with -view, can restart process with -fresh.
+;;    Buffer refreshes with -make-buffer-view,
+;;    can restart process with -make-buffer-fresh.
 ;;    Keybinds can be viewed with `pdftk-bm-transient`, bound to '?'.
-;; 4. User does C-c C-c that runs `pdftk update_info` and
+;; 4. User does C-c C-c (or 'A' in transient) that runs `pdftk update_info` and
 ;;    creates a new pdf file.
 ;; 5. User verifies "<filename>_modifed.pdf".
 
