@@ -194,7 +194,9 @@ When UPDATE-DATA-FLAG is non-nil, pdftk-bm--data is modified."
 	 (title (pdftk-bm--bookmark-title obj))
 	 (level (pdftk-bm--bookmark-level obj))
 	 (page-number (pdftk-bm--bookmark-page-number obj))
-	 (prefix-char (get-text-property (point) 'pdftk-bm-prefix-char)))
+	 ;; TODO: Just make prefix-char a global defcustom
+	 ;;       Default case is for empty buffer (there are no current text-properties
+	 (prefix-char (or (get-text-property (point) 'pdftk-bm-prefix-char) ?*)))
     (add-text-properties (line-beginning-position) (1+ (line-end-position))
 			 `(line-prefix ,(concat (make-string level prefix-char) " ")
 				       pdftk-bm-prefix-char ,prefix-char))
@@ -254,22 +256,31 @@ When UPDATE-DATA-FLAG is non-nil, pdftk-bm--data is modified."
     (pdftk-bm-make-buffer-view)
     (goto-char save-point)))
 
-(defun pdftk-bm-insert-new-bookmark ()
+(defun pdftk-bm--read-bookmark ()
+  (pdftk-bm--bookmark-create :title (read-string "Title: ")
+			     :level (read-number "Level: ")
+			     :page-number (+ (read-number "Page Number: ")
+					     pdftk-bm-page-offset)))
+
+(defun pdftk-bm-insert-new-bookmark (bookmark)
   "Prompt for creation of bookmark, then insert in next line."
   ;; TODO: this fails when used at (point-max), specifically put-text-property goes out of bounds.
   ;;       Maybe add wrapping condition that checks if (point-max) and automatically backward-char.
-  ;;         Still doesn't exactly solve case of empty buffer.
-  (interactive)
+  (interactive (list (pdftk-bm--read-bookmark)))
   (let ((inhibit-read-only t)
-	(prev-props (text-properties-at (point)))
-	(bookmark (pdftk-bm--bookmark-create :title (read-string "Title: ")
-					    :level (read-number "Level: ")
-					    :page-number (+ (read-number "Page Number: ")
-							    pdftk-bm-page-offset))))
-    (insert (apply 'propertize "\n" prev-props))
-    (pdftk-bm--insert-heading bookmark t)
-    (put-text-property (line-beginning-position) (1+ (line-end-position))
-		       'pdftk-bm--bookmark-obj bookmark)
+	(prev-props (text-properties-at (point))))
+    (if (= (buffer-size) 0)
+	(progn
+	  (pdftk-bm--insert-heading bookmark t)
+	  (insert (apply 'propertize "\n" prev-props))
+	  (backward-char 1)
+	  (put-text-property (line-beginning-position) (1+ (line-end-position))
+			     'pdftk-bm--bookmark-obj bookmark))
+      (progn
+	(insert (apply 'propertize "\n" prev-props))
+	(pdftk-bm--insert-heading bookmark t)
+	(put-text-property (line-beginning-position) (1+ (line-end-position))
+			   'pdftk-bm--bookmark-obj bookmark)))
     (pdftk-bm--update-props)))
 
 (defun pdftk-bm-delete-bookmark ()
