@@ -10,7 +10,5 @@
 
 (package-file "pdftk-bm.el")
 
-(script "test" "echo \"Error: no test specified\" && exit 1")
-
 (depends-on "emacs" "26.1")
 (depends-on "transient" "0.7")
