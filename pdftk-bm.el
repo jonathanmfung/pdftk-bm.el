@@ -90,12 +90,10 @@ Returns a list of pdftk-bm--bookmark."
 (cl-defgeneric pdftk-bm-to-heading (prefix level text)
   (:doc "Format an outline-mode heading"))
 
-;; TODO: remove unused 'pdftk-bm-level/page-number props
 (cl-defmethod pdftk-bm-to-heading
-  (&key prefix-char level text page-number bookmark-obj)
+  (&key prefix-char level text bookmark-obj)
   (propertize text
 	      'line-prefix (concat (make-string level prefix-char) " ")
-	      'pdftk-bm-level level 'pdftk-bm-page-number page-number
 	      'pdftk-bm--bookmark-obj bookmark-obj
 	      'pdftk-bm-prefix-char prefix-char))
 
@@ -103,7 +101,6 @@ Returns a list of pdftk-bm--bookmark."
   (pdftk-bm-to-heading :prefix-char ?*
 		       :level (pdftk-bm--bookmark-level bookmark)
 		       :text (pdftk-bm--bookmark-title bookmark)
-		       :page-number (pdftk-bm--bookmark-page-number bookmark)
 		       :bookmark-obj bookmark))
 
 ;; (pdftk-bm-to-heading :prefix-char ?- :level 2 :text "Asdf" :page-number 10)
@@ -197,8 +194,6 @@ When UPDATE-DATA-FLAG is non-nil, pdftk-bm--data is modified."
 	 (prefix-char (get-text-property (point) 'pdftk-bm-prefix-char)))
     (add-text-properties (line-beginning-position) (1+ (line-end-position))
 			 `(line-prefix ,(concat (make-string level prefix-char) " ")
-				       pdftk-bm-level ,level
-				       pdftk-bm-page-number ,page-number
 				       pdftk-bm-prefix-char ,prefix-char))
     (overlay-put olay-pn 'after-string (propertize (concat " " (number-to-string page-number))
 						   'face '(:foreground "blue" :weight bold)))
