@@ -22,10 +22,11 @@
 
 (require 'transient)
 
-;;;; Internal Vars
+;;;; Vars
 (defvar pdftk-bm-pdf-filepath nil
   "Absolute filepath of pdf whose bookmarks are being modified.")
 
+;;;;; Customs
 (defcustom pdftk-bm-page-offset 0
   "Page offset, e.g. when Book page 1 is PDF page 21."
   :type 'integer :group 'pdftk-bm)
@@ -122,11 +123,11 @@ Returns a list of pdftk-bm--bookmark."
 		     #'<= pdftk-bm--data)))
 
 (defun pdftk-bm--data-title (obj)
-  "Extract OBJ's title from pdftk-bm--data."
+  "Extract OBJ's title overlay from pdftk-bm--data."
   (plist-get (seq-find (lambda (x) (eq (plist-get x :obj) obj)) pdftk-bm--data) :title))
 
 (defun pdftk-bm--data-page-number (obj)
-  "Extract OBJ's page-number from pdftk-bm--data."
+  "Extract OBJ's page-number overlay from pdftk-bm--data."
   (plist-get (seq-find (lambda (x) (eq (plist-get x :obj) obj)) pdftk-bm--data) :page-number))
 
 (defun pdftk-bm--insert-heading (bookmark update-data-flag)
@@ -358,6 +359,8 @@ Modifies a copy of original file, suffixed with '_modified'."
     (process-send-eof process)
     (message "Successfully created %s" new-filepath)))
 
+;;; Transient
+
 ;; NOTE: If -page-offset is defvar-local, then transient reverts to
 ;;       default value after each action.
 ;;       So need to manually reset to 0 in -find-pdf.
@@ -369,6 +372,8 @@ Modifies a copy of original file, suffixed with '_modified'."
   :variable 'pdftk-bm-page-offset)
 
 (transient-define-prefix pdftk-bm-transient ()
+  "Transient for pdftk-bm mode."
+
   ["Arguments" (pdftk-bm--page-offset-transient)]
 
   [["Edit At Point"
