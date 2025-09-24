@@ -247,9 +247,11 @@ When UPDATE-DATA-FLAG is non-nil, pdftk-bm--data is modified."
   (interactive (list (read-string "New Title: "
 				  (pdftk-bm--bookmark-title (get-text-property (point) 'pdftk-bm--bookmark-obj)))))
   (let* ((obj (pdftk-bm--obj-at-point))
-	 (inhibit-read-only t))
+	 (inhibit-read-only t)
+	 (save-point (point)))
     (setf (pdftk-bm--bookmark-title obj) new-title)
-    (pdftk-bm--update-props)))
+    (pdftk-bm-make-buffer-view)
+    (goto-char save-point)))
 
 (defun pdftk-bm-insert-new-bookmark ()
   "Prompt for creation of bookmark, then insert in next line."
