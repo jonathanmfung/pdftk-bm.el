@@ -18,7 +18,13 @@ View all keybinds with ~pdftk-bm-transient~, default bound to ~?~.
 * Install
 Only on GitHub.
 
+Runtime Requirements:
+- ~pdftk~
+
 * Development
+Build Requirements:
+- ~Eask~
+
 #+begin_src sh
 eask test ert pdftk-bm-test.el
 eask compile
