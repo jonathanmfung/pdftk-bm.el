@@ -1,0 +1,19 @@
+* Usage
+1. Use ~pdftk-bm-find-pdf~ to select a PDF file.
+2. Modify the ~*pdftk-bm*~ buffer with ~pdftk-bm-insert-new-bookmark~, ~pdftk-bm-delete-bookmark~, ~pdftk-bm-promote~, ~pdftk-bm-demote~, ~pdftk-bm-edit-page-number~, ~pdftk-bm-edit-title~.
+3. Apply new bookmarks ~pdftk-bm-do-update-pdf~ ~C-c C-c~, which creates a copy of the original file ~<FILE>_modified.pdf~.
+
+View all keybinds with ~pdftk-bm-transient~, default bound to ~?~.
+
+** Customs
+- ~pdftk-bm-page-offset~
+- ~pdftk-bm-modified-suffix~
+
+* Install
+Only on GitHub.
+
+* Development
+#+begin_src sh
+eask test ert pdftk-bm-test.el
+eask compile
+#+end_src
