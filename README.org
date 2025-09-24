@@ -1,13 +1,19 @@
 * Usage
 1. Use ~pdftk-bm-find-pdf~ to select a PDF file.
 2. Modify the ~*pdftk-bm*~ buffer with ~pdftk-bm-insert-new-bookmark~, ~pdftk-bm-delete-bookmark~, ~pdftk-bm-promote~, ~pdftk-bm-demote~, ~pdftk-bm-edit-page-number~, ~pdftk-bm-edit-title~.
-3. Apply new bookmarks ~pdftk-bm-do-update-pdf~ ~C-c C-c~, which creates a copy of the original file ~<FILE>_modified.pdf~.
+3. Apply new bookmarks ~pdftk-bm-do-update-pdf~ (~C-c C-c~), which creates a copy of the original file ~<FILE>_modified.pdf~.
 
 View all keybinds with ~pdftk-bm-transient~, default bound to ~?~.
 
 ** Customs
-- ~pdftk-bm-page-offset~
-- ~pdftk-bm-modified-suffix~
+#+begin_src elisp :results table :exports results
+(defun show-var-doc (sym) (list (format "`%s`" (symbol-name sym)) (elisp-get-var-docstring sym)))
+(mapcar 'show-var-doc (mapcar 'car (get 'pdftk-bm 'custom-group)))
+#+end_src
+
+#+RESULTS:
+| `pdftk-bm-page-offset`     | Page offset, e.g. when Book page 1 is PDF page 21. |
+| `pdftk-bm-modified-suffix` | Suffix to add to filename of updated PDF.          |
 
 * Install
 Only on GitHub.
