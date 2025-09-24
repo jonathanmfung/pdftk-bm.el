@@ -264,8 +264,6 @@ When UPDATE-DATA-FLAG is non-nil, pdftk-bm--data is modified."
 
 (defun pdftk-bm-insert-new-bookmark (bookmark)
   "Prompt for creation of bookmark, then insert in next line."
-  ;; TODO: this fails when used at (point-max), specifically put-text-property goes out of bounds.
-  ;;       Maybe add wrapping condition that checks if (point-max) and automatically backward-char.
   (interactive (list (pdftk-bm--read-bookmark)))
   (let ((inhibit-read-only t)
 	(prev-props (text-properties-at (point))))
@@ -277,7 +275,9 @@ When UPDATE-DATA-FLAG is non-nil, pdftk-bm--data is modified."
 	  (put-text-property (line-beginning-position) (1+ (line-end-position))
 			     'pdftk-bm--bookmark-obj bookmark))
       (progn
-	(insert (apply 'propertize "\n" prev-props))
+	;; Special case when after last heading.
+	(when (= (point) (point-max)) (backward-char 1))
+	(insert (apply 'propertize "\n" (text-properties-at (point))))
 	(pdftk-bm--insert-heading bookmark t)
 	(put-text-property (line-beginning-position) (1+ (line-end-position))
 			   'pdftk-bm--bookmark-obj bookmark)))
