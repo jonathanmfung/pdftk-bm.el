@@ -87,7 +87,6 @@ Returns a list of pdftk-bm--bookmark."
     (seq-reverse bm-list)))
 
 ;;;; Buffer Creation
-
 (cl-defgeneric pdftk-bm-to-heading (prefix level text)
   (:doc "Format an outline-mode heading"))
 
@@ -209,7 +208,6 @@ When UPDATE-DATA-FLAG is non-nil, pdftk-bm--data is modified."
     (pdftk-bm--update-props)))
 
 ;;;;; Interactive Commands
-
 (defun pdftk-bm-promote ()
   "Decrease level of bookmark object at point."
   (interactive)
@@ -282,7 +280,6 @@ When UPDATE-DATA-FLAG is non-nil, pdftk-bm--data is modified."
     (setq pdftk-bm--data (seq-remove (lambda (x) (eq (plist-get x :obj) obj)) pdftk-bm--data))))
 
 ;;;; Serialization
-
 (defun pdftk-bm--bookmark-serialize (bookmark)
   "Convert BOOKMARK to pdftk info format."
   (let ((title (pdftk-bm--bookmark-title bookmark))
@@ -361,8 +358,7 @@ Modifies a copy of original file, suffixed with '_modified'."
     (process-send-eof process)
     (message "Successfully created %s" new-filepath)))
 
-;;; Transient
-
+;;;; Transient
 ;; NOTE: If -page-offset is defvar-local, then transient reverts to
 ;;       default value after each action.
 ;;       So need to manually reset to 0 in -find-pdf.
