@@ -26,6 +26,9 @@
 (defvar pdftk-bm-pdf-filepath nil
   "Absolute filepath of pdf whose bookmarks are being modified.")
 
+(defcustom pdftk-bm-page-offset 0
+  "Page offset, e.g. when Book page 1 is PDF page 21."
+  :type 'integer :group 'pdftk-bm)
 ;;;; Structs
 (cl-defstruct
     (pdftk-bm--bookmark (:constructor pdftk-bm--bookmark-create)
@@ -217,15 +220,19 @@ When UPDATE-DATA-FLAG is non-nil, pdftk-bm--data is modified."
 	 (new-level (1+ cur-level)))
     (pdftk-bm--change-level new-level)))
 
-;; TODO: Both edit-page-number/title do not update display after execution.
+(defun pdftk-bm--prompt-page-number ()
+  (read-number "New Page Number: "
+	       (pdftk-bm--bookmark-page-number (get-text-property (point) 'pdftk-bm--bookmark-obj))))
+
 (defun pdftk-bm-edit-page-number (new-page-number)
   "Modify bookmark object at point to have NEW-PAGE-NUMBER."
-  (interactive (list (read-number "New Page Number: "
-				  (pdftk-bm--bookmark-page-number (get-text-property (point) 'pdftk-bm--bookmark-obj)))))
+  (interactive (list (funcall 'pdftk-bm--prompt-page-number)))
   (let* ((obj (pdftk-bm--obj-at-point))
-	 (inhibit-read-only t))
-    (setf (pdftk-bm--bookmark-page-number obj) new-page-number)
-    (pdftk-bm--update-props)))
+	 (inhibit-read-only t)
+	 (save-point (point)))
+    (setf (pdftk-bm--bookmark-page-number obj) (+ new-page-number pdftk-bm-page-offset))
+    (pdftk-bm-make-buffer-view)
+    (goto-char save-point)))
 
 (defun pdftk-bm-edit-title (new-title)
   "Modify bookmark object at point to have NEW-TITLE."
@@ -246,7 +253,8 @@ When UPDATE-DATA-FLAG is non-nil, pdftk-bm--data is modified."
 	(prev-props (text-properties-at (point)))
 	(bookmark (pdftk-bm--bookmark-create :title (read-string "Title: ")
 					    :level (read-number "Level: ")
-					    :page-number (read-number "Page Number: "))))
+					    :page-number (+ (read-number "Page Number: ")
+							    pdftk-bm-page-offset))))
     (insert (apply 'propertize "\n" prev-props))
     (pdftk-bm--insert-heading bookmark t)
     (put-text-property (line-beginning-position) (1+ (line-end-position))
@@ -322,6 +330,7 @@ into full pdftk info format."
   (interactive)
   (pdftk-bm-check)
   (setq pdftk-bm-pdf-filepath (expand-file-name (read-file-name "PDF: ")))
+  (setq pdftk-bm-page-offset 0)
   (pdftk-bm-make-buffer-fresh))
 
 ;; NOTE: Always default to making a copy of pdf, let user check and delete original
@@ -341,7 +350,19 @@ Modifies a copy of original file, suffixed with '_modified'."
     (process-send-eof process)
     (message "Successfully created %s" new-filepath)))
 
+;; NOTE: If -page-offset is defvar-local, then transient reverts to
+;;       default value after each action.
+;;       So need to manually reset to 0 in -find-pdf.
+(transient-define-infix pdftk-bm--page-offset-transient ()
+  "Set Page Offset."
+  :class 'transient-lisp-variable
+  :key "-o"
+  :description "Page Offset"
+  :variable 'pdftk-bm-page-offset)
+
 (transient-define-prefix pdftk-bm-transient ()
+  ["Arguments" (pdftk-bm--page-offset-transient)]
+
   [["Edit At Point"
     ("b" "Promote Heading" pdftk-bm-promote :transient t)
     ("f" "Demote Heading" pdftk-bm-demote :transient t)]
@@ -349,8 +370,6 @@ Modifies a copy of original file, suffixed with '_modified'."
     ("t" "Edit Title" pdftk-bm-edit-title)
     ("p" "Edit Page Number" pdftk-bm-edit-page-number)]]
 
-  ;; TODO: maybe add transient arg for page offset, e.g. when book page 1 is pdf page 21.
-  ;;       Then edit-page-number and insert-new-bookmark can do automatically calculate.
   [["Commands"
     ("i" "Insert New Bookmark" pdftk-bm-insert-new-bookmark)
     ("x" "Delete Bookmark" pdftk-bm-delete-bookmark)]
