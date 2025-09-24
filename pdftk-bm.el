@@ -28,6 +28,9 @@
   "Absolute filepath of pdf whose bookmarks are being modified.")
 
 ;;;;; Customs
+(defgroup pdftk-bm nil "Options for pdftk-bm.el."
+  :version "1.0.0")
+
 (defcustom pdftk-bm-page-offset 0
   "Page offset, e.g. when Book page 1 is PDF page 21."
   :type 'integer :group 'pdftk-bm)
