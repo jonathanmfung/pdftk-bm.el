@@ -43,6 +43,14 @@
   (page-number 1 :type 'integer))
 
 ;;;; Parsing
+(defun pdftk-bm--split-string-first (string delim)
+  "Split STRING on first occurence of DELIM.
+Always returns a 2-length list.
+If DELIM does not appear in STRING, second elem is nil."
+  (let* ((splits (split-string string delim))
+	 (tail (cdr splits)))
+    (list (car splits) (when tail (string-join tail delim)))))
+
 ;; Begin > Title > Level > PageNumber
 (defun pdftk-bm--parse-metadata (md)
   "MD is a list of metadata file lines.
@@ -50,11 +58,10 @@ Returns a list of pdftk-bm--bookmark."
   (declare (side-effect-free t))
   (let (temp result-list)
     (dolist (line md result-list)
-      (pcase (split-string line ": ")
-	('("BookmarkBegin") (setf temp (pdftk-bm--bookmark-create)))
+      (pcase (pdftk-bm--split-string-first line ": ")
+	('("BookmarkBegin" nil) (setf temp (pdftk-bm--bookmark-create)))
 	(`("BookmarkTitle" ,val) (setf (pdftk-bm--bookmark-title temp) val))
-	(`("BookmarkLevel" ,val)
-	 (setf (pdftk-bm--bookmark-level temp) (string-to-number val)))
+	(`("BookmarkLevel" ,val) (setf (pdftk-bm--bookmark-level temp) (string-to-number val)))
 	(`("BookmarkPageNumber" ,val)
 	 (progn
 	   (setf (pdftk-bm--bookmark-page-number temp) (string-to-number val))
