@@ -195,6 +195,7 @@ When UPDATE-DATA-FLAG is non-nil, pdftk-bm--data is modified."
       (remove-overlays (point-min) (point-max))
       (when update-data-flag (setq pdftk-bm--data nil))
       (seq-doseq (bookmark bookmark-list)
+	;; TODO: maybe clean up `text-properties-at . pdftk-bm-to-heading` to just gen a plist?
 	(insert (apply 'propertize "" (text-properties-at 0 (pdftk-bm-to-heading bookmark))))
 	(pdftk-bm--insert-heading bookmark update-data-flag)
 	(insert (apply 'propertize "\n" (text-properties-at 0 (pdftk-bm-to-heading bookmark))))))
