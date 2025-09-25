@@ -261,7 +261,7 @@ When UPDATE-DATA-FLAG is non-nil, pdftk-bm--data is modified."
 
 (defun pdftk-bm--prompt-page-number ()
   (read-number "New Page Number: "
-	       (pdftk-bm--bookmark-page-number (get-text-property (point) 'pdftk-bm--bookmark-obj))))
+	       (pdftk-bm--bookmark-page-number (pdftk-bm--obj-at-point))))
 
 (defun pdftk-bm-edit-page-number (new-page-number)
   "Modify bookmark object at point to have NEW-PAGE-NUMBER."
