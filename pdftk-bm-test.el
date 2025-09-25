@@ -26,6 +26,8 @@
      :type 'wrong-type-argument)))
 
 (ert-deftest insert-new-bookmark ()
+  "pdftk-bm-insert-new-bookmark inserts in next line without moving point,
+unless at point-max."
   (let ((pdftk-bm--data nil)
 	(bookmark1 (pdftk-bm--bookmark-create :title "Foo" :level 1 :page-number 2))
 	(bookmark2 (pdftk-bm--bookmark-create :title "Bar" :level 3 :page-number 4)))
@@ -36,6 +38,11 @@
     (with-temp-buffer
       (pdftk-bm-insert-new-bookmark bookmark1)
       (pdftk-bm-insert-new-bookmark bookmark2)
+      (should (equal (pdftk-bm--bookmark-title (pdftk-bm--obj-at-point)) "Foo")))
+    (with-temp-buffer
+      (pdftk-bm-insert-new-bookmark bookmark1)
+      (pdftk-bm-insert-new-bookmark bookmark2)
+      (forward-char 1)
       (should (equal (pdftk-bm--bookmark-title (pdftk-bm--obj-at-point)) "Bar")))
     ;; At point-max
     (with-temp-buffer

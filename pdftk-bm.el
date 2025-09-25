@@ -41,13 +41,40 @@
   "Suffix to add to filename of updated PDF."
   :type 'string :group 'pdftk-bm)
 
+(defgroup pdftk-bm-faces nil "Faces for pdftk-bm."
+  :group 'pdftk-bm
+  :group 'faces)
+
+(defface pdftk-bm-title-face
+  '((t :inherit default))
+  "Face for Title overlay"
+  :group 'pdftk-bm-faces)
+
+(defface pdftk-bm-page-number-face
+  '((t :inherit default))
+  "Face for Page Number overlay"
+  :group 'pdftk-bm-faces)
+
+(defface pdftk-bm-title-modified-face
+  '((((class color) (background light)) :inherit italic :foreground "grey30")
+    (((class color) (background  dark)) :inherit italic :foreground "grey80"))
+  "Face for modified Title overlay"
+  :group 'pdftk-bm-faces)
+
+(defface pdftk-bm-page-number-modified-face
+  '((((class color) (background light)) :inherit italic :foreground "red2")
+    (((class color) (background  dark)) :inherit italic :foreground "IndianRed1"))
+  "Face for modified Page Number overlay"
+  :group 'pdftk-bm-faces)
+
 ;;;; Structs
 (cl-defstruct
     (pdftk-bm--bookmark (:constructor pdftk-bm--bookmark-create)
 			(:copier nil))
   (title "" :type 'string)
   (level 1 :type 'integer)
-  (page-number 1 :type 'integer))
+  (page-number 1 :type 'integer)
+  (modified nil :type 'bool))
 
 ;;;; Parsing
 (defun pdftk-bm--split-string-first (string delim)
@@ -132,21 +159,25 @@ Returns a list of pdftk-bm--bookmark."
   "Extract OBJ's page-number overlay from pdftk-bm--data."
   (plist-get (seq-find (lambda (x) (eq (plist-get x :obj) obj)) pdftk-bm--data) :page-number-olay))
 
+(defun pdftk-bm--update-title-olay (olay title modified)
+  (overlay-put olay 'after-string
+	       (propertize title 'face (if modified 'pdftk-bm-title-modified-face 'pdftk-bm-title-face))))
+
+(defun pdftk-bm--update-page-number-olay (olay page-number modified)
+  (overlay-put olay 'after-string
+	       (propertize (format " [%d]" page-number)
+			   'face (if modified 'pdftk-bm-page-number-modified-face 'pdftk-bm-page-number-face))))
+
 (defun pdftk-bm--insert-heading (bookmark update-data-flag)
   "Insert BOOKMARK as heading at point.
 When UPDATE-DATA-FLAG is non-nil, pdftk-bm--data is modified."
   (let* ((bol (line-beginning-position))
 	 (eol (line-end-position))
          (olay-title (make-overlay bol bol))
-	 (olay-pn (make-overlay eol eol)))
-    ;; TODO: add 'modified field to bookmark that conditions the color
-    ;;       also needs same logic in --update-props
-    (overlay-put olay-title 'after-string
-		 (propertize (pdftk-bm--bookmark-title bookmark)
-                             'face '(:foreground "gray" :weight bold)))
-    (overlay-put olay-pn 'after-string
-		 (propertize (concat " " (number-to-string (pdftk-bm--bookmark-page-number bookmark)))
-                             'face '(:foreground "red" :weight bold)))
+	 (olay-pn (make-overlay eol eol))
+	 (modified (pdftk-bm--bookmark-modified bookmark)))
+    (pdftk-bm--update-title-olay olay-title (pdftk-bm--bookmark-title bookmark) modified)
+    (pdftk-bm--update-page-number-olay olay-pn (pdftk-bm--bookmark-page-number bookmark) modified)
     (when update-data-flag
       (add-to-list 'pdftk-bm--data (list :obj bookmark :title-olay olay-title :page-number-olay olay-pn)))))
 
@@ -189,21 +220,18 @@ When UPDATE-DATA-FLAG is non-nil, pdftk-bm--data is modified."
 (defun pdftk-bm--update-props ()
   "Rerender line at point."
   (let* ((obj (pdftk-bm--obj-at-point))
-	 (olay-title (pdftk-bm--data-title-olay obj))
-	 (olay-pn (pdftk-bm--data-page-number-olay obj))
-	 (title (pdftk-bm--bookmark-title obj))
 	 (level (pdftk-bm--bookmark-level obj))
-	 (page-number (pdftk-bm--bookmark-page-number obj))
+	 (modified (pdftk-bm--bookmark-modified obj))
 	 ;; TODO: Just make prefix-char a global defcustom
 	 ;;       Default case is for empty buffer (there are no current text-properties
 	 (prefix-char (or (get-text-property (point) 'pdftk-bm-prefix-char) ?*)))
     (add-text-properties (line-beginning-position) (1+ (line-end-position))
 			 `(line-prefix ,(concat (make-string level prefix-char) " ")
 				       pdftk-bm-prefix-char ,prefix-char))
-    (overlay-put olay-pn 'after-string (propertize (concat " " (number-to-string page-number))
-						   'face '(:foreground "blue" :weight bold)))
-    (overlay-put olay-title 'after-string (propertize title
-						      'face '(:foreground "purple" :weight bold)))))
+    (pdftk-bm--update-title-olay (pdftk-bm--data-title-olay obj)
+				 (pdftk-bm--bookmark-title obj) modified)
+    (pdftk-bm--update-page-number-olay (pdftk-bm--data-page-number-olay obj)
+				       (pdftk-bm--bookmark-page-number obj) modified)))
 
 (defun pdftk-bm--change-level (new-level)
   "Modify bookmark object at point to have NEW-LEVEL."
@@ -242,6 +270,7 @@ When UPDATE-DATA-FLAG is non-nil, pdftk-bm--data is modified."
 	 (inhibit-read-only t)
 	 (save-point (point)))
     (setf (pdftk-bm--bookmark-page-number obj) (+ new-page-number pdftk-bm-page-offset))
+    (setf (pdftk-bm--bookmark-modified obj) t)
     (pdftk-bm-make-buffer-view)
     (goto-char save-point)))
 
@@ -253,6 +282,7 @@ When UPDATE-DATA-FLAG is non-nil, pdftk-bm--data is modified."
 	 (inhibit-read-only t)
 	 (save-point (point)))
     (setf (pdftk-bm--bookmark-title obj) new-title)
+    (setf (pdftk-bm--bookmark-modified obj) t)
     (pdftk-bm-make-buffer-view)
     (goto-char save-point)))
 
@@ -266,7 +296,9 @@ When UPDATE-DATA-FLAG is non-nil, pdftk-bm--data is modified."
   "Prompt for creation of bookmark, then insert in next line."
   (interactive (list (pdftk-bm--read-bookmark)))
   (let ((inhibit-read-only t)
-	(prev-props (text-properties-at (point))))
+	(prev-props (text-properties-at (point)))
+	(save-point (point)))
+    (setf (pdftk-bm--bookmark-modified bookmark) t)
     (if (= (buffer-size) 0)
 	(progn
 	  (pdftk-bm--insert-heading bookmark t)
@@ -281,7 +313,8 @@ When UPDATE-DATA-FLAG is non-nil, pdftk-bm--data is modified."
 	(pdftk-bm--insert-heading bookmark t)
 	(put-text-property (line-beginning-position) (1+ (line-end-position))
 			   'pdftk-bm--bookmark-obj bookmark)))
-    (pdftk-bm--update-props)))
+    (pdftk-bm--update-props)
+    (goto-char save-point)))
 
 (defun pdftk-bm-delete-bookmark ()
   "Delete bookmark at point."
@@ -406,8 +439,6 @@ Modifies a copy of original file, suffixed with '_modified'."
 
 (define-derived-mode pdftk-bm-mode read-only-mode "pdftk-bm"
   "Major mode for pdftk-bm buffers."
-  ;; TODO: add face-colors for line-prefix, title-overlay, and page-number-overlay.
-  ;;       Maybe also for 'modified status
   :interactive nil)
 
 (provide 'pdftk-bm)
