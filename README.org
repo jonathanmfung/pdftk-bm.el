@@ -5,9 +5,11 @@
 
 View all keybinds with ~pdftk-bm-transient~, default bound to ~?~.
 
-> [!WARNING]
-> This package will strip location coordinates (x,y).
-> e.g. Bookmarks that link precisely to a heading, not just a page.
+#+begin_quote
+[!WARNING]
+This package will strip location coordinates (x,y).
+e.g. Bookmarks that link precisely to a heading, not just a page.
+#+end_quote
 
 ** Customs
 #+begin_src elisp :results table :exports results
