@@ -41,6 +41,11 @@
   "Suffix to add to filename of updated PDF."
   :type 'string :group 'pdftk-bm)
 
+(defcustom pdftk-bm-heading-char ?*
+  "Character to prefix heading with."
+  :type 'char :group 'pdftk-bm)
+
+;;;;; Faces
 (defgroup pdftk-bm-faces nil "Faces for pdftk-bm."
   :group 'pdftk-bm
   :group 'faces)
@@ -123,16 +128,17 @@ Returns a list of pdftk-bm--bookmark."
 (cl-defgeneric pdftk-bm-to-heading (prefix level text)
   (:doc "Format an outline-mode heading"))
 
+(defun pdftk-bm--heading-prefix (level)
+  (concat (make-string level pdftk-bm-heading-char) " "))
+
 (cl-defmethod pdftk-bm-to-heading
-  (&key prefix-char level text bookmark-obj)
+  (&key level text bookmark-obj)
   (propertize text
-	      'line-prefix (concat (make-string level prefix-char) " ")
-	      'pdftk-bm--bookmark-obj bookmark-obj
-	      'pdftk-bm-prefix-char prefix-char))
+	      'line-prefix (pdftk-bm--heading-prefix level)
+	      'pdftk-bm--bookmark-obj bookmark-obj))
 
 (cl-defmethod pdftk-bm-to-heading ((bookmark pdftk-bm--bookmark))
-  (pdftk-bm-to-heading :prefix-char ?*
-		       :level (pdftk-bm--bookmark-level bookmark)
+  (pdftk-bm-to-heading :level (pdftk-bm--bookmark-level bookmark)
 		       :text (pdftk-bm--bookmark-title bookmark)
 		       :bookmark-obj bookmark))
 
@@ -226,13 +232,9 @@ When UPDATE-DATA-FLAG is non-nil, pdftk-bm--data is modified."
   "Rerender line at point."
   (let* ((obj (pdftk-bm--obj-at-point))
 	 (level (pdftk-bm--bookmark-level obj))
-	 (modified (pdftk-bm--bookmark-modified obj))
-	 ;; TODO: Just make prefix-char a global defcustom
-	 ;;       Default case is for empty buffer (there are no current text-properties
-	 (prefix-char (or (get-text-property (point) 'pdftk-bm-prefix-char) ?*)))
+	 (modified (pdftk-bm--bookmark-modified obj)))
     (add-text-properties (line-beginning-position) (1+ (line-end-position))
-			 `(line-prefix ,(concat (make-string level prefix-char) " ")
-				       pdftk-bm-prefix-char ,prefix-char))
+			 `(line-prefix ,(pdftk-bm--heading-prefix level)))
     (pdftk-bm--update-title-olay (pdftk-bm--data-title-olay obj)
 				 (pdftk-bm--bookmark-title obj) modified)
     (pdftk-bm--update-page-number-olay (pdftk-bm--data-page-number-olay obj)
