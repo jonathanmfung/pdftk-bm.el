@@ -5,6 +5,10 @@
 
 View all keybinds with ~pdftk-bm-transient~, default bound to ~?~.
 
+> [!WARNING]
+> This package will strip location coordinates (x,y).
+> e.g. Bookmarks that link precisely to a heading, not just a page.
+
 ** Customs
 #+begin_src elisp :results table :exports results
 (defun show-var-doc (sym) (list (format "~%s~" (symbol-name sym)) (elisp-get-var-docstring sym)))
