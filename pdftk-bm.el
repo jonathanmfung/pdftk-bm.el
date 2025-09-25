@@ -145,11 +145,15 @@ Returns a list of pdftk-bm--bookmark."
   "Inplace sort, by page-number."
   ;; TODO: Since multiple bookmarks can be on same page, need a way to preserve order.
   ;;       E.g. running pdftk-bm--make-buffer-view multiple times results in different orders.
+  ;; NOTE: (page-number, level) is not always semantically correct.
+  ;;       E.g. lvl 1 starts after lvl 2 on same page.
   ;; TODO: If pdftk adds support for positions, then that is enough for unique sort.
   ;;       https://gitlab.com/pdftk-java/pdftk/-/issues/130
   (setq pdftk-bm--data
-	(seq-sort-by (lambda (elem) (pdftk-bm--bookmark-page-number (plist-get elem :obj)))
-		     #'<= pdftk-bm--data)))
+	(seq-sort-by (lambda (elem) (let ((obj (plist-get elem :obj)))
+				      (list (pdftk-bm--bookmark-page-number obj)
+					    (pdftk-bm--bookmark-level obj))))
+		     #'version-list-< pdftk-bm--data)))
 
 (defun pdftk-bm--data-title-olay (obj)
   "Extract OBJ's title overlay from pdftk-bm--data."
